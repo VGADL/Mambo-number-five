@@ -3,33 +3,42 @@ import db from "../db/config.js";
 import { ObjectId } from "mongodb";
 
 const router = express.Router();
-
-// return first 50 documents from movies collection
+/**
+ * Lista de eventos com paginação (20 por página)
+ */
 router.get("/", async (req, res) => {
- let results = await db.collection('events').find({})
- .limit(1)
- .toArray();
- res.send(results).status(200);
-});
+  const page = parseInt(req.query.page) || 1;  // página atual
+  const limit = 20;                            // nº fixo de eventos por página
+  const skip = (page - 1) * limit;             // quantos documentos saltar
 
-// GET /events/:id
-router.get('/:id', async (req, res) => {
   try {
-    const eventId = req.params.id;
+    // Obter total de eventos para calcular nº de páginas
+    const total = await db.collection("events").countDocuments();
 
-    // converter para ObjectId
-    const event = await db.collection('events').findOne({ _id: new ObjectId(eventId) });
+    // Buscar os eventos paginados
+    const events = await db.collection("events")
+      .find({})
+      .skip(skip)
+      .limit(limit)
+      .toArray();
 
-    if (!event) {
-      return res.status(404).json({ success: false, message: 'Evento não encontrado' });
-    }
+    // Resposta JSON com metadados de paginação
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: events
+    });
 
-    res.status(200).json({ success: true, data: event });
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ success: false, message: 'ID inválido ou erro no servidor' });
+    console.error("Erro ao obter eventos:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao obter eventos"
+    });
   }
 });
-
 export default router;
 
