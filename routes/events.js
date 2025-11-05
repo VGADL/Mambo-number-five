@@ -6,10 +6,10 @@ const router = express.Router();
 
 // return first 50 documents from movies collection
 router.get("/", async (req, res) => {
- let results = await db.collection('events').find({})
- .limit(1)
- .toArray();
- res.send(results).status(200);
+  let results = await db.collection('events').find({})
+    .limit(50)
+    .toArray();
+  res.send(results).status(200);
 });
 
 // GET /events/:id
