@@ -44,32 +44,39 @@ router.get("/", async (req, res) => {
 /*
 3. Adicionar 1 ou vários eventos
 */
-router.post("/", async (req, res) => {
-  try {
-    const data = req.body;
 
-    // se receber um array -> insertMany, senão insertOne
-    if (Array.isArray(data)) {
-      const result = await db.collection("events").insertMany(data);
-      res.status(201).json({
-        success: true,
-        insertedCount: result.insertedCount,
-        message: `${result.insertedCount} eventos adicionados`
-      });
-    } else {
-      const result = await db.collection("events").insertOne(data);
-      res.status(201).json({
-        success: true,
-        insertedId: result.insertedId,
-        message: "Evento adicionado com sucesso"
-      });
+// POST /events
+/*router.post("/", async (req, res) => {
+  try {
+    const payload = req.body;
+    const events = Array.isArray(payload) ? payload : [payload];
+    const inserted = [];
+
+    for (const event of events) {
+      // Gera id incremental usando o contador
+
+      const result = await db.collection("events").insertOne(event);
+      inserted.push({ ...event, _id: result.insertedId });
     }
 
+    return res.status(201).json({
+      success: true,
+      message: "Evento(s) criado(s) com sucesso!",
+      insertedCount: inserted.length,
+      data: inserted,
+    });
   } catch (err) {
-    console.error("Erro ao adicionar evento(s):", err);
-    res.status(500).json({ success: false, message: "Erro ao adicionar evento(s)" });
+    console.error("Erro ao criar evento(s):", err);
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao criar evento(s)",
+      error: err.message,
+    });
   }
-});
+});*/
+
+
+
 
 //5. GET /events/:id
 router.get("/:id", async (req, res) => {
@@ -113,5 +120,27 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+//7. Remove um evento pelo seu ID interno do MongoDB
+router.delete("/:id", async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const objectId = new ObjectId(eventId);
 
+    const result = await db.collection("events").deleteOne({ _id: objectId });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: "Evento não encontrado" });
+    }
+
+    res.status(200).json({ success: true, message: "Evento removido com sucesso" });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
+  }
+});
 export default router;
+
+
+
+
+
