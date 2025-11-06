@@ -1,9 +1,8 @@
 import express from "express";
 import db from "../db/config.js";
+
 import { ObjectId } from "mongodb";
-
 const router = express.Router();
-
 /**
  * Lista de utilizadores com paginação (20 por página)
  */
@@ -41,25 +40,33 @@ router.get("/", async (req, res) => {
     });
   }
 });
+/*
+Adicionar 1 ou vários utilizadores
+*/
+router.post("/", async (req, res) => {
+  try {
+    const data = req.body;
 
-// GET /users/:id
-router.get('/:id', async (req, res) => {
-    try {
-        const userId = req.params.id;
-
-        // converter para ObjectId
-        const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
-
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'Utilizador não encontrado' });
-        }
-
-        res.status(200).json({ success: true, data: user });
-    } catch (err) {
-        console.error(err);
-        res.status(400).json({ success: false, message: 'ID inválido ou erro no servidor' });
+    if (Array.isArray(data)) {
+      const result = await db.collection("users").insertMany(data);
+      res.status(201).json({
+        success: true,
+        insertedCount: result.insertedCount,
+        message: `${result.insertedCount} utilizadores adicionados`
+      });
+    } else {
+      const result = await db.collection("users").insertOne(data);
+      res.status(201).json({
+        success: true,
+        insertedId: result.insertedId,
+        message: "Utilizador adicionado com sucesso"
+      });
     }
+
+  } catch (err) {
+    console.error("Erro ao adicionar utilizador(es):", err);
+    res.status(500).json({ success: false, message: "Erro ao adicionar utilizador(es)" });
+  }
 });
 
 export default router;
-
