@@ -18,6 +18,7 @@ router.get("/", async (req, res) => {
     // Buscar os utilizadores paginados
     const users = await db.collection("users")
       .find({})
+      .sort({ _id: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
@@ -68,5 +69,30 @@ router.post("/", async (req, res) => {
     res.status(500).json({ success: false, message: "Erro ao adicionar utilizador(es)" });
   }
 });
+
+// PUT /users/:id
+router.put("/:id", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const updateData = { ...req.body };
+
+    // não deixar alterar o id
+    delete updateData._id;
+
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json({ success: false, message: "Nenhum dado fornecido para atualização" }); }
+
+    const result = await db.collection("users").updateOne({ _id: userId }, { $set: updateData });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, message: "Utilizador não encontrado" }); }
+
+    res.status(200).json({ success: true, message: "Utilizador atualizado com sucesso"});
+  } catch (err) {
+    console.error("Erro ao atualizar utilizador:", err);
+    res.status(500).json({ success: false, message: "Erro ao atualizar utilizador"});
+  }
+});
+
 
 export default router;

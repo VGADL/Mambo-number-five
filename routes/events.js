@@ -75,6 +75,7 @@ router.post("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const eventId = req.params.id;
+
     const event = await db.collection("events").findOne({ _id: new ObjectId(eventId) });
 
     if (!event) {
@@ -113,5 +114,34 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+//PUT /events/:id
+router.put("/:id", async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const updatedData = { ...req.body };
+
+    // não permite alterar id's
+    delete updatedData._id;
+    delete updatedData.id;  
+
+    if(!updatedData || Object.keys(updatedData).length === 0) {
+      return res.status(400).json({ success: false, message: "Nenhum dado fornecido para atualização" });
+    }
+
+    const result = await db.collection("events").updateOne(
+      { _id: new ObjectId(eventId) },
+      { $set: updatedData }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ success: false, message: "Evento não encontrado" });
+    }
+
+    res.status(200).json({ success: true, message: "Evento atualizado com sucesso" });
+  } catch (err) {
+    console.error("Erro ao atualizar evento:", err);
+    res.status(500).json({ success: false, message: "Erro ao atualizar evento" });
+  }
+});
 
 export default router;
