@@ -140,7 +140,106 @@ router.delete("/:id", async (req, res) => {
 });
 export default router;
 
+//11. 
+router.get("/top/:limit", async (req, res) => {
+  try {
+    // Lê o limite da rota
+    const limit = parseInt(req.params.limit);
+    if (isNaN(limit) || limit <= 0) {
+      return res.status(400).json({ success: false, message: "O parâmetro 'limit' deve ser um número positivo." });
+    }
 
+    const eventsCollection = db.collection("events");
+    const usersCollection = db.collection("users");
 
+    // Buscar todos os eventos e utilizadores
+    const events = await eventsCollection.find({}).toArray();
+    const users = await usersCollection.find({}).toArray();
+
+    // Calcular média das classificações
+    const eventsWithRatings = events.map(event => {
+      const ratings = users
+        .flatMap(user =>
+          user.movies
+            .filter(m => m.movieid === event.id && m.rating != null)
+            .map(m => m.rating)
+        );
+
+      const averageRating =
+        ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
+      return {
+        ...event,
+        averageRating: Number(averageRating.toFixed(2))
+      };
+    });
+
+    // Ordenar e limitar
+    const sortedEvents = eventsWithRatings.sort((a, b) => b.averageRating - a.averageRating);
+    const limitedEvents = sortedEvents.slice(0, limit);
+
+    // Responder
+    res.status(200).json({
+      success: true,
+      total: limitedEvents.length,
+      data: limitedEvents
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Erro ao listar eventos por score." });
+  }
+});
+
+//12
+router.get("/reviews/:order", async (req, res) => {
+  try {
+    const order = req.params.order.toLowerCase();
+
+    if (order !== "asc" && order !== "desc") {
+      return res.status(400).json({
+        success: false,
+        message: "O parâmetro 'order' deve ser 'asc' ou 'desc'."
+      });
+    }
+
+    const eventsCollection = db.collection("events");
+    const usersCollection = db.collection("users");
+
+    // Buscar todos os eventos e utilizadores
+    const events = await eventsCollection.find({}).toArray();
+    const users = await usersCollection.find({}).toArray();
+
+    // Contar número de reviews por evento
+    const eventsWithReviewCount = events.map(event => {
+      const reviewCount = users.reduce((count, user) => {
+        const hasReview = user.movies.some(m => m.movieid === event.id && m.rating != null);
+        return hasReview ? count + 1 : count;
+      }, 0);
+
+      return {
+        ...event,
+        totalReviews: reviewCount
+      };
+    });
+
+    // Ordenar por número de reviews
+    const sortedEvents = eventsWithReviewCount.sort((a, b) => {
+      return order === "asc" ? a.totalReviews - b.totalReviews : b.totalReviews - a.totalReviews;
+    });
+
+    res.status(200).json({
+      success: true,
+      order,
+      total: sortedEvents.length,
+      data: sortedEvents
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao listar eventos por número de reviews."
+    });
+  }
+});
 
 
