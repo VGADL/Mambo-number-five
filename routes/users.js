@@ -40,5 +40,33 @@ router.get("/", async (req, res) => {
     });
   }
 });
+/*
+Adicionar 1 ou vários utilizadores
+*/
+router.post("/", async (req, res) => {
+  try {
+    const data = req.body;
+
+    if (Array.isArray(data)) {
+      const result = await db.collection("users").insertMany(data);
+      res.status(201).json({
+        success: true,
+        insertedCount: result.insertedCount,
+        message: `${result.insertedCount} utilizadores adicionados`
+      });
+    } else {
+      const result = await db.collection("users").insertOne(data);
+      res.status(201).json({
+        success: true,
+        insertedId: result.insertedId,
+        message: "Utilizador adicionado com sucesso"
+      });
+    }
+
+  } catch (err) {
+    console.error("Erro ao adicionar utilizador(es):", err);
+    res.status(500).json({ success: false, message: "Erro ao adicionar utilizador(es)" });
+  }
+});
 
 export default router;
