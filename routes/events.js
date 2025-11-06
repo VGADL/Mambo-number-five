@@ -4,7 +4,7 @@ import { ObjectId } from "mongodb";
 
 const router = express.Router();
 /**
- * Lista de eventos com paginação (20 por página)
+ *1 Lista de eventos com paginação (20 por página) 
  */
 router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 1;  // página atual
@@ -42,7 +42,7 @@ router.get("/", async (req, res) => {
 });
 
 /*
-Adicionar 1 ou vários eventos
+3. Adicionar 1 ou vários eventos
 */
 router.post("/", async (req, res) => {
   try {
@@ -70,5 +70,48 @@ router.post("/", async (req, res) => {
     res.status(500).json({ success: false, message: "Erro ao adicionar evento(s)" });
   }
 });
+
+//5. GET /events/:id
+router.get("/:id", async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const event = await db.collection("events").findOne({ _id: new ObjectId(eventId) });
+
+    if (!event) {
+      return res.status(404).json({ success: false, message: "Evento não encontrado" });
+    }
+
+    // Procurar avaliações dos utilizadores que referem este evento
+    const users = await db.collection("users").find({
+      "movies.movieid": event.id  // relaciona id do evento com movieid dos users
+    }).toArray();
+
+    // Extrair todos os ratings deste evento
+    let ratings = [];
+    for (const user of users) {
+      const matchedMovie = user.movies.find(m => m.movieid === event.id && m.rating != null);
+      if (matchedMovie) {
+        ratings.push(matchedMovie.rating);
+      }
+    }
+
+    // Calcular média
+    const averageRating = ratings.length > 0
+      ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)
+      : null;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...event,
+        averageRating: averageRating ? Number(averageRating) : "Sem avaliações"
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
+  }
+});
+
 
 export default router;
