@@ -121,7 +121,27 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-//PUT /events/:id
+
+//7. Remove um evento pelo seu ID interno do MongoDB
+router.delete("/:id", async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const objectId = new ObjectId(eventId);
+
+    const result = await db.collection("events").deleteOne({ _id: objectId });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: "Evento não encontrado" });
+    }
+
+    res.status(200).json({ success: true, message: "Evento removido com sucesso" });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
+  }
+});
+
+//9.PUT /events/:id
 router.put("/:id", async (req, res) => {
   try {
     const eventId = req.params.id;
@@ -150,25 +170,6 @@ router.put("/:id", async (req, res) => {
     res.status(500).json({ success: false, message: "Erro ao atualizar evento" });
   }
 });
-//7. Remove um evento pelo seu ID interno do MongoDB
-router.delete("/:id", async (req, res) => {
-  try {
-    const eventId = req.params.id;
-    const objectId = new ObjectId(eventId);
-
-    const result = await db.collection("events").deleteOne({ _id: objectId });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, message: "Evento não encontrado" });
-    }
-
-    res.status(200).json({ success: true, message: "Evento removido com sucesso" });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
-  }
-});
-export default router;
 
 //11. 
 router.get("/top/:limit", async (req, res) => {
@@ -271,5 +272,6 @@ router.get("/reviews/:order", async (req, res) => {
     });
   }
 });
+export default router;
 
 

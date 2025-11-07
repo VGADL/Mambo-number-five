@@ -99,10 +99,10 @@ router.post("/", async (req, res) => {
 */
 router.get("/:id", async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
-
-    // 1️⃣ Procurar o utilizador
+    const userId = Number(req.params.id);
     const user = await db.collection("users").findOne({ _id: userId });
+
+
 
     if (!user) {
       return res.status(404).json({
@@ -148,9 +148,22 @@ router.get("/:id", async (req, res) => {
       .filter(e => e !== null) // remover os nulos
       .slice(0, 3); // só top 3 válidos
 
+    // Mensagem adequada
+    let message = "";
+    if (validTopEvents.length === 0) {
+      message = `${user.name} não tem eventos válidos com nome.`;
+    } else if (validTopEvents.length < 3) {
+      message = `${user.name} tem apenas ${validTopEvents.length} evento(s) válido(s) com nome.`;
+    } else if (validTopEvents.length > 3) {
+      message = `${user.name} tem ${validTopEvents.length} eventos válidos — a mostrar os 3 melhores.`;
+    } else {
+      message = `Top 3 eventos do utilizador ${user.name}.`;
+    }
+
     // Resposta
     res.status(200).json({
       success: true,
+      message,
       data: {
         user: {
           _id: user._id,
@@ -172,7 +185,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// PUT /users/:id
+// 10. PUT /users/:id
 router.put("/:id", async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
