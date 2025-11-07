@@ -133,6 +133,55 @@ router.get("/star", async (req, res) => {
     });
   }
 });
+//14
+
+router.get("/:year", async (req, res) => {
+  try {
+    const year = parseInt(req.params.year);
+
+    if (isNaN(year)) {
+      return res.status(400).json({
+        success: false,
+        message: "O parâmetro 'year' deve ser um número."
+      });
+    }
+
+    const eventsCollection = db.collection("events");
+    const usersCollection = db.collection("users");
+
+    // Buscar todos os utilizadores e eventos
+    const users = await usersCollection.find({}).toArray();
+    const events = await eventsCollection.find({}).toArray();
+
+    // Obter IDs de eventos com reviews nesse ano
+    const reviewedEventIds = new Set();
+
+    users.forEach(user => {
+      user.movies.forEach(movie => {
+        const reviewYear = new Date(movie.date).getFullYear();
+        if (reviewYear === year) {
+          reviewedEventIds.add(movie.movieid);
+        }
+      });
+    });
+
+    // Filtrar eventos que tenham sido avaliados nesse ano
+    const filteredEvents = events.filter(ev => reviewedEventIds.has(ev.id));
+
+    res.status(200).json({
+      success: true,
+      year: year,
+      total: filteredEvents.length,
+      data: filteredEvents
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao listar eventos avaliados no ano indicado."
+    });
+  }
+});
 
 
 //5. GET /events/:id
@@ -205,9 +254,9 @@ router.put("/:id", async (req, res) => {
 
     // não permite alterar id's
     delete updatedData._id;
-    delete updatedData.id;  
+    delete updatedData.id;
 
-    if(!updatedData || Object.keys(updatedData).length === 0) {
+    if (!updatedData || Object.keys(updatedData).length === 0) {
       return res.status(400).json({ success: false, message: "Nenhum dado fornecido para atualização" });
     }
 
