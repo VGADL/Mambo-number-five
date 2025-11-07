@@ -184,6 +184,47 @@ router.get("/:id", async (req, res) => {
     });
   }
 });
+/*
+8. DELETE /users/:id
+Remover user pelo _id
+*/
+router.delete("/:id", async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+
+    // verifica se o user existe
+    const user = await db.collection("users").findOne({ _id: userId });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilizador não encontrado"
+      });
+    }
+
+    // apaga o user
+    const result = await db.collection("users").deleteOne({ _id: userId });
+
+    if (result.deletedCount === 1) {
+      res.status(200).json({
+        success: true,
+        message: `Utilizador com ID ${userId} removido com sucesso`
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Erro ao remover utilizador"
+      });
+    }
+
+  } catch (err) {
+    console.error("Erro ao remover utilizador:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao remover utilizador"
+    });
+  }
+});
 
 // 10. PUT /users/:id
 router.put("/:id", async (req, res) => {
