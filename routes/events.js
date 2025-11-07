@@ -76,14 +76,74 @@ router.get("/", async (req, res) => {
 });*/
 
 
+/*
+13. GET /events/star
+Lista de eventos com mais 5 estrelas.
+Mostra toda a informação do evento e o número de reviews iguais a 5.
+*/
+router.get("/star", async (req, res) => {
+  try {
+    //  Obter todos os utilizadores
+    const users = await db.collection("users").find({}).toArray();
+
+    // Contar quantas vezes cada evento recebeu 5 estrelas
+    const ratingCount = {}; // { movieid: nº de avaliações 5 }
+    users.forEach(user => {
+      (user.movies || []).forEach(m => {
+        if (m.rating === 5) {
+          ratingCount[m.movieid] = (ratingCount[m.movieid] || 0) + 1;
+        }
+      });
+    });
+
+    // Caso nenhum evento tenha rating 5
+    if (Object.keys(ratingCount).length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Nenhum evento com 5 estrelas encontrado.",
+        data: []
+      });
+    }
+
+    // Buscar os eventos correspondentes pelo campo `id`
+    const eventIds = Object.keys(ratingCount).map(id => Number(id));
+    const events = await db.collection("events")
+      .find({ id: { $in: eventIds } })
+      .toArray();
+
+    // Adicionar o número de reviews 5 a cada evento
+    const eventsWithStars = events.map(event => ({
+      ...event,
+      fiveStarCount: ratingCount[event.id] || 0
+    }));
+
+    // Ordenar pelos com mais 5 estrelas
+    const sorted = eventsWithStars.sort((a, b) => b.fiveStarCount - a.fiveStarCount);
+
+    // Enviar a resposta completa
+    res.status(200).json({
+      success: true,
+      message: "Lista de eventos com mais avaliações de 5 estrelas.",
+      total: sorted.length,
+      data: sorted
+    });
+
+  } catch (err) {
+    console.error("Erro ao obter eventos com 5 estrelas:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao obter eventos com 5 estrelas"
+    });
+  }
+});
 
 
 //5. GET /events/:id
 router.get("/:id", async (req, res) => {
   try {
-    const eventId = req.params.id;
+    const eventId = new ObjectId(req.params.id);
 
-    const event = await db.collection("events").findOne({ _id: new ObjectId(eventId) });
+    const event = await db.collection("events").findOne({ _id: eventId });
 
     if (!event) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
@@ -120,7 +180,6 @@ router.get("/:id", async (req, res) => {
     res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
   }
 });
-
 
 //7. Remove um evento pelo seu ID interno do MongoDB
 router.delete("/:id", async (req, res) => {
@@ -272,6 +331,7 @@ router.get("/reviews/:order", async (req, res) => {
     });
   }
 });
+
 export default router;
 
 
