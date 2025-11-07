@@ -41,34 +41,48 @@ router.get("/", async (req, res) => {
     });
   }
 });
-/*
-Adicionar 1 ou vários utilizadores
-*/
+
+// POST /events — adicionar 1 ou vários eventos
 router.post("/", async (req, res) => {
   try {
-    const data = req.body;
+    const payload = Array.isArray(req.body) ? req.body : [req.body];
 
-    if (Array.isArray(data)) {
-      const result = await db.collection("users").insertMany(data);
-      res.status(201).json({
-        success: true,
-        insertedCount: result.insertedCount,
-        message: `${result.insertedCount} utilizadores adicionados`
-      });
-    } else {
-      const result = await db.collection("users").insertOne(data);
-      res.status(201).json({
-        success: true,
-        insertedId: result.insertedId,
-        message: "Utilizador adicionado com sucesso"
-      });
+    // prepara docs: limpa _id e gera id sequencial
+    const docs = [];
+    for (const item of payload) {
+      const ev = { ...item };
+      delete ev._id;              // deixa o Mongo criar o _id
+      ev.id = await gerarNovoId(); // <-- usa a TUA função de incremento
+      docs.push(ev);
     }
 
+    // insere
+    if (docs.length === 1) {
+      const r = await db.collection("events").insertOne(docs[0]);
+      return res.status(201).json({
+        success: true,
+        message: "Evento inserido com sucesso",
+        data: { ...docs[0], _id: r.insertedId }
+      });
+    } else {
+      const r = await db.collection("events").insertMany(docs);
+      // anexa os _ids gerados pelo Mongo à resposta
+      const ids = Object.values(r.insertedIds);
+      const data = docs.map((d, i) => ({ ...d, _id: ids[i] }));
+      return res.status(201).json({
+        success: true,
+        message: "Eventos inseridos com sucesso",
+        insertedCount: r.insertedCount,
+        data
+      });
+    }
   } catch (err) {
-    console.error("Erro ao adicionar utilizador(es):", err);
-    res.status(500).json({ success: false, message: "Erro ao adicionar utilizador(es)" });
+    console.error("Erro ao inserir evento(s):", err);
+    return res.status(500).json({ success: false, message: "Erro ao inserir evento(s)" });
   }
 });
+
+
 
 // PUT /users/:id
 router.put("/:id", async (req, res) => {
@@ -94,5 +108,48 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+
+// POST /users/:id/review/:event_id
+router.post("/:id/review/:event_id", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const eventId = parseInt(req.params.event_id);
+    const { rating, comment = "" } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: "Rating deve ser entre 1 e 5" });
+    }
+
+    // pega user
+    const user = await db.collection("users").findOne({ _id: userId });
+    if (!user) return res.status(404).json({ success: false, message: "Utilizador não encontrado" });
+
+    // pega evento
+    const event = await db.collection("events").findOne({ id: eventId });
+    if (!event) return res.status(404).json({ success: false, message: "Evento não encontrado" });
+
+    // criar review
+    const review = {
+      user_id: userId,
+      rating,
+      comment,
+      date: new Date().toLocaleDateString("pt-PT"),
+    };
+
+    // adicionar review ao evento
+    const result = await db.collection("events").updateOne(
+      { id: eventId },
+      { $push: { reviews: review } }
+    );
+
+    if (result.modifiedCount === 0)
+      return res.status(500).json({ success: false, message: "Erro ao adicionar review" });
+
+    res.status(201).json({ success: true, message: "Review adicionada com sucesso", review });
+  } catch (err) {
+    console.error("Erro ao adicionar review:", err);
+    res.status(500).json({ success: false, message: "Erro ao adicionar review" });
+  }
+});
 
 export default router;

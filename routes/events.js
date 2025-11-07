@@ -41,39 +41,36 @@ router.get("/", async (req, res) => {
   }
 });
 
-/*
-3. Adicionar 1 ou vários eventos
-*/
-
-// POST /events
-/*router.post("/", async (req, res) => {
+// POST /events — adicionar 1 ou vários eventos (simples)
+router.post("/", async (req, res) => {
   try {
-    const payload = req.body;
-    const events = Array.isArray(payload) ? payload : [payload];
-    const inserted = [];
+    const isArray = Array.isArray(req.body);
+    const payload = isArray ? req.body : [req.body];
 
-    for (const event of events) {
-      // Gera id incremental usando o contador
 
-      const result = await db.collection("events").insertOne(event);
-      inserted.push({ ...event, _id: result.insertedId });
+    if (payload.length === 1) {
+      const r = await db.collection("events").insertOne(payload[0]);
+      return res.status(201).json({
+        success: true,
+        message: "Evento inserido com sucesso",
+        data: { _id: r.insertedId, ...payload[0] }   // junta _id + resto do evento
+      });
     }
+
+    const r = await db.collection("events").insertMany(payload);
 
     return res.status(201).json({
       success: true,
-      message: "Evento(s) criado(s) com sucesso!",
-      insertedCount: inserted.length,
-      data: inserted,
+      message: "Eventos inseridos com sucesso",
+      insertedCount: r.insertedCount,
+      data
     });
   } catch (err) {
-    console.error("Erro ao criar evento(s):", err);
-    return res.status(500).json({
-      success: false,
-      message: "Erro ao criar evento(s)",
-      error: err.message,
-    });
+    console.error("Erro ao inserir evento(s):", err);
+    return res.status(500).json({ success: false, message: "Erro ao inserir evento(s)" });
   }
-});*/
+});
+
 
 
 
