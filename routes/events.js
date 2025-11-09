@@ -188,6 +188,54 @@ router.post("/", async (req, res) => {
   }
 });
 
+//Comparar 2 eventos
+router.get("/compare/:id1/:id2", async (req, res) => {
+  try {
+    const id1 = parseInt(req.params.id1);
+    const id2 = parseInt(req.params.id2);
+
+    if (isNaN(id1) || isNaN(id2)) {
+      return res.status(400).json({ success: false, message: "Os IDs devem ser numéricos." });
+    }
+
+    const users = await db.collection("users").find({}).toArray();
+    const events = await db.collection("events").find({ id: { $in: [id1, id2] } }).toArray();
+
+    const stats = { [id1]: { total: 0, sum: 0, five: 0 }, [id2]: { total: 0, sum: 0, five: 0 } };
+
+    users.forEach(u => {
+      (u.movies || []).forEach(m => {
+        if ([id1, id2].includes(m.movieid)) {
+          stats[m.movieid].total++;
+          stats[m.movieid].sum += m.rating;
+          if (m.rating === 5) stats[m.movieid].five++;
+        }
+      });
+    });
+
+    const comparison = [id1, id2].map(id => {
+      const e = events.find(ev => ev.id === id);
+      const s = stats[id];
+      return {
+        event: e ? e.name : `Evento ${id}`,
+        avgRating: s.total ? (s.sum / s.total).toFixed(2) : null,
+        totalReviews: s.total,
+        fiveStarsPercent: s.total ? `${((s.five / s.total) * 100).toFixed(1)}%` : "0%"
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Comparação entre eventos concluída.",
+      comparison
+    });
+  } catch (err) {
+    console.error("Erro ao comparar eventos:", err);
+    res.status(500).json({ success: false, message: "Erro ao comparar eventos." });
+  }
+});
+
+
 // 13. GET /events/star Lista de eventos com mais 5 estrelas.
 router.get("/star", async (req, res) => {
   try {
