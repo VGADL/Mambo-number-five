@@ -47,7 +47,7 @@ Adicionar 1 ou vários utilizadores
 */
 router.post("/", async (req, res) => {
   try {
-    const payload = Array.isArray(req.body) ? req.body : [req.body];
+    const data = req.body;
 
     //Obter o maior _id atual da coleção
     const lastUser = await db.collection("users")
@@ -55,7 +55,7 @@ router.post("/", async (req, res) => {
       .sort({ _id: -1 })
       .limit(1)
       .toArray();
-    
+
     // Definir o próximo _id
     const nextId = lastUser.length > 0 ? lastUser[0]._id + 1 : 1;
 
@@ -65,7 +65,7 @@ router.post("/", async (req, res) => {
       data.forEach((u, i) => {
         if (u._id === undefined) u._id = nextId + i;
       });
-    
+
     const result = await db.collection("users").insertMany(data);
       return res.status(201).json({
         success: true,
@@ -313,5 +313,4 @@ router.post("/:id/review/:event_id", async (req, res) => {
     res.status(500).json({ success: false, message: "Erro ao adicionar review" });
   }
 });
-
 export default router;

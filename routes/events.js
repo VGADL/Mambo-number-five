@@ -43,33 +43,9 @@ router.get("/", async (req, res) => {
 
 // POST /events — adicionar 1 ou vários eventos (simples)
 router.post("/", async (req, res) => {
-  try {
-    const isArray = Array.isArray(req.body);
-    const payload = isArray ? req.body : [req.body];
 
-
-    if (payload.length === 1) {
-      const r = await db.collection("events").insertOne(payload[0]);
-      return res.status(201).json({
-        success: true,
-        message: "Evento inserido com sucesso",
-        data: { _id: r.insertedId, ...payload[0] }   // junta _id + resto do evento
-      });
-    }
-
-    const r = await db.collection("events").insertMany(payload);
-
-    return res.status(201).json({
-      success: true,
-      message: "Eventos inseridos com sucesso",
-      insertedCount: r.insertedCount,
-      data
-    });
-  } catch (err) {
-    console.error("Erro ao inserir evento(s):", err);
-    return res.status(500).json({ success: false, message: "Erro ao inserir evento(s)" });
-  }
 });
+
 
 
 
@@ -133,6 +109,42 @@ router.get("/star", async (req, res) => {
     });
   }
 });
+
+
+// GET /events/active?date=YYYY-MM-DD novo endpoint
+router.get("/active", async (req, res) => {
+  try {
+    // aceita ?date=YYYY-MM-DD, senão usa a data de hoje do pc
+    const date =
+      (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date))
+        ? req.query.date
+        : new Date().toISOString().split("T")[0];
+
+    // se estiver no intervalo ou for a propria data
+    const filter = {
+      $or: [
+        { $and: [{ StartDate: { $lte: date } }, { LastDate: { $gte: date } }] },
+        { occurences: date }
+      ]
+    };
+
+    const events = await db.collection("events").find(filter).toArray();
+
+        res.status(201).json({
+      success: true,
+      date,
+      total: events.length,
+      data: events
+    });
+  } catch (err) {
+    console.error("Erro ao obter eventos ativos:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao obter eventos ativos"
+    });
+  }
+});
+
 //14
 
 router.get("/:year", async (req, res) => {
@@ -377,6 +389,8 @@ router.get("/reviews/:order", async (req, res) => {
     });
   }
 });
+
+
 
 export default router;
 
