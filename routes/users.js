@@ -4,7 +4,7 @@ import db from "../db/config.js";
 import { ObjectId } from "mongodb";
 const router = express.Router();
 
-// 2. GET /users Lista de utilizadores com paginação (20 por página) 
+// 2. GET /users Lista de utilizadores com paginação 20/página 
 router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 1;  // página atual
   const limit = 20;                            // nº fixo de utilizadores por página
@@ -14,16 +14,14 @@ router.get("/", async (req, res) => {
     // Obter total de utilizadores para calcular nº de páginas
     const total = await db.collection("users").countDocuments();
 
-    // Buscar os utilizadores paginados
+    // Obter utilizadores com paginação
     const users = await db.collection("users")
       .find({})
       .sort({ _id: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
-
-    // Resposta JSON com metadados de paginação
-    res.status(200).json({
+      res.status(200).json({
       success: true,
       page,
       limit,
@@ -46,13 +44,14 @@ router.post("/", async (req, res) => {
   try {
     const data = req.body;
 
-    // Obter o maior _id atual da coleção
+    // Pega o último _id usado
     const lastUser = await db.collection("users")
       .find({})
       .sort({ _id: -1 })
       .limit(1)
       .toArray();
 
+      // Define o próximo ID sequencial
     const nextId = lastUser.length > 0 ? lastUser[0]._id + 1 : 1;
 
     // Função para validar e preparar cada utilizador
@@ -270,7 +269,7 @@ router.post("/:id/review/:event_id", async (req, res) => {
       user_id: userId,
       rating,
       comment,
-      date: new Date().toLocaleDateString("pt-PT"),
+      date: new Date().toISOString().split("T")[0] // só data
     };
 
     // adicionar review ao evento
@@ -327,12 +326,12 @@ router.get("/:id", async (req, res) => {
 
     const eventIds = sortedEvents.map(m => m.movieid);
 
-    // Buscar eventos correspondentes
+    // Pega detalhes dos eventos avaliados
     const events = await db.collection("events")
       .find({ _id: { $in: eventIds } })
       .toArray();
 
-    // Combina avaliações com eventos, apenas eventos existentes
+    // Mapeia avaliações para detalhes dos eventos
     const validTopEvents = sortedEvents
       .map(movie => {
         const event = events.find(e => e._id === movie.movieid);
@@ -433,7 +432,7 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    // insere
+    // Adiciona lógica para remover avaliações feitas por este utilizador em eventos
     if (docs.length === 1) {
       const r = await db.collection("events").insertOne(docs[0]);
       return res.status(201).json({
