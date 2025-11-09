@@ -326,12 +326,12 @@ router.get("/:id", async (req, res) => {
 
     const eventIds = sortedEvents.map(m => m.movieid);
 
-    // Buscar eventos correspondentes
+    // Pega detalhes dos eventos avaliados
     const events = await db.collection("events")
       .find({ _id: { $in: eventIds } })
       .toArray();
 
-    // Combina avaliações com eventos, apenas eventos existentes
+    // Mapeia avaliações para detalhes dos eventos
     const validTopEvents = sortedEvents
       .map(movie => {
         const event = events.find(e => e._id === movie.movieid);
@@ -432,7 +432,7 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    // insere
+    // Adiciona lógica para remover avaliações feitas por este utilizador em eventos
     if (docs.length === 1) {
       const r = await db.collection("events").insertOne(docs[0]);
       return res.status(201).json({
