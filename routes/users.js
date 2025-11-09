@@ -4,7 +4,7 @@ import db from "../db/config.js";
 import { ObjectId } from "mongodb";
 const router = express.Router();
 
-// 2. GET /users Lista de utilizadores com paginação (20 por página) 
+// 2. GET /users Lista de utilizadores com paginação 20/página 
 router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 1;  // página atual
   const limit = 20;                            // nº fixo de utilizadores por página
@@ -14,16 +14,14 @@ router.get("/", async (req, res) => {
     // Obter total de utilizadores para calcular nº de páginas
     const total = await db.collection("users").countDocuments();
 
-    // Buscar os utilizadores paginados
+    // Obter utilizadores com paginação
     const users = await db.collection("users")
       .find({})
       .sort({ _id: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
-
-    // Resposta JSON com metadados de paginação
-    res.status(200).json({
+      res.status(200).json({
       success: true,
       page,
       limit,
@@ -46,13 +44,14 @@ router.post("/", async (req, res) => {
   try {
     const data = req.body;
 
-    // Obter o maior _id atual da coleção
+    // Pega o último _id usado
     const lastUser = await db.collection("users")
       .find({})
       .sort({ _id: -1 })
       .limit(1)
       .toArray();
 
+      // Define o próximo ID sequencial
     const nextId = lastUser.length > 0 ? lastUser[0]._id + 1 : 1;
 
     // Função para validar e preparar cada utilizador
@@ -270,7 +269,7 @@ router.post("/:id/review/:event_id", async (req, res) => {
       user_id: userId,
       rating,
       comment,
-      date: new Date().toLocaleDateString("pt-PT"),
+      date: new Date().toISOString().split("T")[0] // só data
     };
 
     // adicionar review ao evento
@@ -316,13 +315,13 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    // Buscar detalhes dos eventos
+    // Pega detalhes dos eventos avaliados
     const eventIds = sortedMovies.map(m => m.movieid);
     const events = await db.collection("events")
       .find({ id: { $in: eventIds } })
       .toArray();
 
-    // Combinar e filtrar só os eventos válidos (com nome)
+    // Mapear os top eventos com detalhes
     const validTopEvents = sortedMovies
       .map(movie => {
         const event = events.find(e => e.id === movie.movieid);
@@ -338,7 +337,7 @@ router.get("/:id", async (req, res) => {
           featured_image: event.featured_media_large || null
         };
       })
-      .filter(e => e !== null) // remover os nulos
+      .filter(e => e !== null) // remove os nulos
       .slice(0, 3); // só top 3 válidos
 
     // Mensagem adequada
@@ -353,7 +352,6 @@ router.get("/:id", async (req, res) => {
       message = `Top 3 eventos do utilizador ${user.name}.`;
     }
 
-    // Resposta
     res.status(200).json({
       success: true,
       message,
