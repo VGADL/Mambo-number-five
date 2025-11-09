@@ -11,10 +11,10 @@ router.get("/", async (req, res) => {
   const skip = (page - 1) * limit;             // quantos documentos saltar
 
   try {
-    // Obter total de eventos para calcular nº de páginas
+    // Contar o total de eventos
     const total = await db.collection("events").countDocuments();
 
-    // Buscar os eventos paginados
+    // Obter eventos com paginação
     const events = await db.collection("events")
       .find({})
       .sort({ _id: -1 })
@@ -22,7 +22,7 @@ router.get("/", async (req, res) => {
       .limit(limit)
       .toArray();
 
-    // Resposta JSON com metadados de paginação
+    // Responder com dados paginados
     res.status(200).json({
       success: true,
       page,
@@ -53,7 +53,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Obter o maior _id atual
+    // Obter o maior _id atual para atribuição automática
     const lastEvent = await db.collection("events")
       .find({})
       .sort({ _id: -1 })
@@ -62,7 +62,7 @@ router.post("/", async (req, res) => {
 
     let lastId = (lastEvent.length > 0 && !isNaN(Number(lastEvent[0]._id))) ? Number(lastEvent[0]._id) : 0;
 
-    // Função de validação e preparação de evento
+    // Função de validação de evento
     const validarEvento = (event, index = 0) => {
       if (!event || typeof event !== "object") {
         throw new Error(`Evento #${index + 1} inválido — deve ser um objeto JSON.`);
@@ -94,20 +94,20 @@ router.post("/", async (req, res) => {
         throw new Error(`Datas inválidas ("StartDate" ou "LastDate") no evento #${index + 1}.`);
       }
 
-      // IDs automáticos incrementais
+      // Atribuição de _id automático
       if (event._id === undefined || isNaN(Number(event._id))) {
         event._id = lastId + index + 1;
       } else {
         event._id = Number(event._id);
       }
 
-      // Garante arrays opcionais
+      // Garantir arrays para campos específicos
       const arrayFields = ["subtitle", "description", "price_cat", "price_val", "target_audience", "accessibility", "reviews"];
       arrayFields.forEach(f => {
         if (!Array.isArray(event[f])) event[f] = [];
       });
 
-      // Validação de links
+      // Validações adicionais
       if (!event.link.startsWith("http")) {
         throw new Error(`Campo "link" deve ser um URL válido no evento #${index + 1}.`);
       }
@@ -122,7 +122,7 @@ router.post("/", async (req, res) => {
     if (Array.isArray(data)) {
       const eventos = data.map((e, i) => validarEvento(e, i));
 
-      // Verifica duplicados antes de inserir
+      // Verifica duplicados
       const ids = eventos.map(ev => ev._id);
       const existing = await db.collection("events").find({ _id: { $in: ids } }).toArray();
       if (existing.length > 0) {
@@ -169,7 +169,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Comparar 2 eventos
+//FUNÇÃO Comparar 2 eventos
 router.get("/compare/:id1/:id2", async (req, res) => {
   try {
     const id1 = parseInt(req.params.id1);
@@ -219,11 +219,11 @@ router.get("/compare/:id1/:id2", async (req, res) => {
 // 13. GET /events/star Lista de eventos com mais 5 estrelas.
 router.get("/star", async (req, res) => {
   try {
-    // Obter todos os utilizadores
+    // Buscar todos os utilizadores
     const users = await db.collection("users").find({}).toArray();
 
     // Contar quantas vezes cada evento recebeu 5 estrelas
-    const ratingCount = {}; // { movieid: nº de avaliações 5 }
+    const ratingCount = {}; 
     users.forEach(user => {
       (user.movies || []).forEach(m => {
         if (m.rating === 5) {
@@ -241,13 +241,13 @@ router.get("/star", async (req, res) => {
       });
     }
 
-    // Buscar os eventos correspondentes pelo campo `_id` numérico
+    //Detalhes dos eventos com 5 estrelas
     const eventIds = Object.keys(ratingCount).map(id => Number(id));
     const events = await db.collection("events")
       .find({ _id: { $in: eventIds } })
       .toArray();
 
-    // Adicionar o número de reviews 5 a cada evento
+    // Adicionar contagem de 5 estrelas aos eventos
     const eventsWithStars = events.map(event => ({
       ...event,
       fiveStarCount: ratingCount[event._id] || 0
@@ -275,7 +275,7 @@ router.get("/star", async (req, res) => {
 //11. GET /events/top/:limit
 router.get("/top/:limit", async (req, res) => {
   try {
-    // Lê o limite da rota
+    // Validar limite
     const limit = parseInt(req.params.limit);
     if (isNaN(limit) || limit <= 0) {
       return res.status(400).json({ success: false, message: "O parâmetro 'limit' deve ser um número positivo." });
@@ -284,11 +284,11 @@ router.get("/top/:limit", async (req, res) => {
     const eventsCollection = db.collection("events");
     const usersCollection = db.collection("users");
 
-    // Buscar todos os eventos e utilizadores
+    // Procurar todos os eventos e utilizadores
     const events = await eventsCollection.find({}).toArray();
     const users = await usersCollection.find({}).toArray();
 
-    // Calcular média das classificações
+    // Calcular média de avaliações por evento
     const eventsWithRatings = events.map(event => {
       const ratings = users
         .flatMap(user =>
@@ -306,11 +306,10 @@ router.get("/top/:limit", async (req, res) => {
       };
     });
 
-    // Ordenar e limitar
+    //  Ordenar por média e limitar resultados
     const sortedEvents = eventsWithRatings.sort((a, b) => b.averageRating - a.averageRating);
     const limitedEvents = sortedEvents.slice(0, limit);
 
-    // Responder
     res.status(200).json({
       success: true,
       total: limitedEvents.length,
@@ -337,7 +336,7 @@ router.get("/reviews/:order", async (req, res) => {
     const eventsCollection = db.collection("events");
     const usersCollection = db.collection("users");
 
-    // Buscar todos os eventos e utilizadores
+    //Todos os eventos e utilizadores
     const events = await eventsCollection.find({}).toArray();
     const users = await usersCollection.find({}).toArray();
 
@@ -377,6 +376,7 @@ router.get("/reviews/:order", async (req, res) => {
 // GET /events/active?date=YYYY-MM-DD novo endpoint
 router.get("/active", async (req, res) => {
   try {
+    // Validar data ou usar data atual
     const date =
       (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date))
         ? req.query.date
@@ -388,7 +388,7 @@ router.get("/active", async (req, res) => {
         { occurences: date }
       ]
     };
-
+ // Obter eventos ativos na data
     const events = await db.collection("events").find(filter).toArray();
 
     res.status(200).json({
@@ -407,7 +407,7 @@ router.get("/active", async (req, res) => {
 router.get("/year/:year", async (req, res) => {
   try {
     const year = parseInt(req.params.year);
-
+// Validar ano
     if (isNaN(year)) {
       return res.status(400).json({
         success: false,
@@ -418,13 +418,14 @@ router.get("/year/:year", async (req, res) => {
     const eventsCollection = db.collection("events");
     const usersCollection = db.collection("users");
 
-    // Buscar todos os utilizadores e eventos
+    // utilizadores e eventos
     const users = await usersCollection.find({}).toArray();
     const events = await eventsCollection.find({}).toArray();
 
-    // Obter IDs de eventos com reviews nesse ano
+  
     const reviewedEventIds = new Set();
 
+    // Identificar eventos avaliados no ano especificado
     users.forEach(user => {
       (user.movies || []).forEach(movie => {
         const reviewYear = new Date(movie.date).getFullYear();
@@ -434,7 +435,7 @@ router.get("/year/:year", async (req, res) => {
       });
     });
 
-    // Filtrar eventos que tenham sido avaliados nesse ano
+    // Filtrar eventos que foram avaliados no ano
     const filteredEvents = events.filter(ev => reviewedEventIds.has(ev._id));
 
     res.status(200).json({
@@ -459,7 +460,7 @@ router.get("/id/:id", async (req, res) => {
     if (isNaN(eventId)) {
       return res.status(400).json({ success: false, message: "O parâmetro 'id' deve ser um número." });
     }
-
+    // Procurar evento pelo ID
     const event = await db.collection("events").findOne({ _id: eventId });
     if (!event) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
@@ -475,7 +476,7 @@ router.get("/id/:id", async (req, res) => {
       const matchedMovie = user.movies.find(m => m.movieid === event._id && m.rating != null);
       if (matchedMovie) ratings.push(matchedMovie.rating);
     }
-
+  // Calcular média de avaliações
     const averageRating = ratings.length > 0
       ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
       : "Sem avaliações";
@@ -524,9 +525,9 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const eventId = parseInt(req.params.id);
-
+    
     const result = await db.collection("events").deleteOne({ _id: eventId });
-
+// Verificar se o evento foi encontrado e removido
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
     }
