@@ -17,6 +17,7 @@ router.get("/", async (req, res) => {
     // Buscar os eventos paginados
     const events = await db.collection("events")
       .find({})
+      .sort({ _id: -1 })
       .skip(skip)
       .limit(limit)
       .toArray();
@@ -45,7 +46,6 @@ router.post("/", async (req, res) => {
   try {
     const data = req.body;
 
-    // Verifica se o corpo está vazio
     if (!data || (Array.isArray(data) && data.length === 0)) {
       return res.status(400).json({
         success: false,
@@ -53,14 +53,14 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Obter o maior ID atual
+    // Obter o maior _id atual
     const lastEvent = await db.collection("events")
       .find({})
-      .sort({ id: -1 })
+      .sort({ _id: -1 })
       .limit(1)
       .toArray();
 
-    const nextId = lastEvent.length > 0 ? lastEvent[0].id + 1 : 1;
+    let lastId = (lastEvent.length > 0 && !isNaN(Number(lastEvent[0]._id))) ? Number(lastEvent[0]._id) : 0;
 
     // Função de validação e preparação de evento
     const validarEvento = (event, index = 0) => {
@@ -70,109 +70,90 @@ router.post("/", async (req, res) => {
 
       // Campos obrigatórios
       const requiredFields = [
-        "type",
-        "title",
-        "subject",
-        "string_dates",
-        "string_times",
-        "venue",
-        "categories_name_list",
-        "tags_name_list",
-        "link",
-        "occurences",
-        "StartDate",
-        "LastDate"
+        "type", "title", "subject", "string_dates",
+        "string_times", "venue", "categories_name_list",
+        "tags_name_list", "link", "occurences",
+        "StartDate", "LastDate"
       ];
-
       for (const field of requiredFields) {
-        if (event[field] === undefined || event[field] === null || event[field] === "") {
+        if (!event[field]) {
           throw new Error(`Campo obrigatório "${field}" em falta no evento #${index + 1}.`);
         }
       }
 
-      // Validações adicionais
       if (event.type !== "event") {
         throw new Error(`Campo "type" deve ser igual a "event" no evento #${index + 1}.`);
       }
-
       if (!event.title?.rendered || typeof event.title.rendered !== "string") {
         throw new Error(`Campo "title.rendered" inválido no evento #${index + 1}.`);
       }
-
       if (!Array.isArray(event.occurences)) {
         throw new Error(`O campo "occurences" deve ser um array no evento #${index + 1}.`);
       }
-
       if (isNaN(Date.parse(event.StartDate)) || isNaN(Date.parse(event.LastDate))) {
         throw new Error(`Datas inválidas ("StartDate" ou "LastDate") no evento #${index + 1}.`);
       }
-      
-      // IDs automáticos
-      if (event.id === undefined) event.id = nextId + index;
-      if (!event._id) event._id = new ObjectId();
+
+      // IDs automáticos incrementais
+      if (event._id === undefined || isNaN(Number(event._id))) {
+        event._id = lastId + index + 1;
+      } else {
+        event._id = Number(event._id);
+      }
 
       // Garante arrays opcionais
-      const arrayFields = [
-        "subtitle", "description", "price_cat", "price_val",
-        "target_audience", "accessibility", "reviews"
-      ];
+      const arrayFields = ["subtitle", "description", "price_cat", "price_val", "target_audience", "accessibility", "reviews"];
       arrayFields.forEach(f => {
         if (!Array.isArray(event[f])) event[f] = [];
       });
 
-      // Garante texto seguro para links e imagens
+      // Validação de links
       if (!event.link.startsWith("http")) {
         throw new Error(`Campo "link" deve ser um URL válido no evento #${index + 1}.`);
       }
-
       if (event.featured_media_large && !event.featured_media_large.startsWith("http")) {
         throw new Error(`Campo "featured_media_large" deve ser um URL válido no evento #${index + 1}.`);
       }
 
-      // Retorna o evento limpo e formatado
-      return {
-        _id: event._id,
-        id: event.id,
-        type: event.type,
-        title: event.title,
-        featured_media_large: event.featured_media_large || null,
-        subtitle: event.subtitle,
-        subject: event.subject,
-        string_dates: event.string_dates,
-        string_times: event.string_times,
-        description: event.description,
-        venue: event.venue,
-        categories_name_list: event.categories_name_list,
-        tags_name_list: event.tags_name_list,
-        link: event.link,
-        occurences: event.occurences,
-        StartDate: event.StartDate,
-        LastDate: event.LastDate,
-        price_cat: event.price_cat,
-        price_val: event.price_val,
-        target_audience: event.target_audience,
-        accessibility: event.accessibility,
-        reviews: event.reviews
-      };
+      return event;
     };
 
-    // Inserção de vários eventos
+    // Inserção de múltiplos eventos
     if (Array.isArray(data)) {
       const eventos = data.map((e, i) => validarEvento(e, i));
-      const result = await db.collection("events").insertMany(eventos);
 
+      // Verifica duplicados antes de inserir
+      const ids = eventos.map(ev => ev._id);
+      const existing = await db.collection("events").find({ _id: { $in: ids } }).toArray();
+      if (existing.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Já existem eventos com os seguintes _id(s): ${existing.map(e => e._id).join(", ")}`
+        });
+      }
+
+      const result = await db.collection("events").insertMany(eventos);
       return res.status(201).json({
         success: true,
         insertedCount: result.insertedCount,
         message: `${result.insertedCount} evento(s) adicionados com sucesso.`,
-        data: eventos,
+        data: eventos
       });
     }
 
     // Inserção de um único evento
     const evento = validarEvento(data);
-    await db.collection("events").insertOne(evento);
 
+    // Verifica duplicado
+    const exists = await db.collection("events").findOne({ _id: evento._id });
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: `Já existe um evento com o _id: ${evento._id}`
+      });
+    }
+
+    await db.collection("events").insertOne(evento);
     res.status(201).json({
       success: true,
       message: "Evento adicionado com sucesso.",
@@ -238,7 +219,7 @@ router.get("/compare/:id1/:id2", async (req, res) => {
 // 13. GET /events/star Lista de eventos com mais 5 estrelas.
 router.get("/star", async (req, res) => {
   try {
-    //  Obter todos os utilizadores
+    // Obter todos os utilizadores
     const users = await db.collection("users").find({}).toArray();
 
     // Contar quantas vezes cada evento recebeu 5 estrelas
@@ -260,22 +241,21 @@ router.get("/star", async (req, res) => {
       });
     }
 
-    // Buscar os eventos correspondentes pelo campo `id`
+    // Buscar os eventos correspondentes pelo campo `_id` numérico
     const eventIds = Object.keys(ratingCount).map(id => Number(id));
     const events = await db.collection("events")
-      .find({ id: { $in: eventIds } })
+      .find({ _id: { $in: eventIds } })
       .toArray();
 
     // Adicionar o número de reviews 5 a cada evento
     const eventsWithStars = events.map(event => ({
       ...event,
-      fiveStarCount: ratingCount[event.id] || 0
+      fiveStarCount: ratingCount[event._id] || 0
     }));
 
     // Ordenar pelos com mais 5 estrelas
     const sorted = eventsWithStars.sort((a, b) => b.fiveStarCount - a.fiveStarCount);
 
-    // Enviar a resposta completa
     res.status(200).json({
       success: true,
       message: "Lista de eventos com mais avaliações de 5 estrelas.",
@@ -423,8 +403,8 @@ router.get("/active", async (req, res) => {
   }
 });
 
-//14. GET /events/:year
-router.get("/:year", async (req, res) => {
+// 14. GET /events/year/:year
+router.get("/year/:year", async (req, res) => {
   try {
     const year = parseInt(req.params.year);
 
@@ -446,16 +426,16 @@ router.get("/:year", async (req, res) => {
     const reviewedEventIds = new Set();
 
     users.forEach(user => {
-      user.movies.forEach(movie => {
+      (user.movies || []).forEach(movie => {
         const reviewYear = new Date(movie.date).getFullYear();
         if (reviewYear === year) {
-          reviewedEventIds.add(movie.movieid);
+          reviewedEventIds.add(movie.movieid); // movieid refere-se ao _id numérico do evento
         }
       });
     });
 
     // Filtrar eventos que tenham sido avaliados nesse ano
-    const filteredEvents = events.filter(ev => reviewedEventIds.has(ev.id));
+    const filteredEvents = events.filter(ev => reviewedEventIds.has(ev._id));
 
     res.status(200).json({
       success: true,
@@ -472,53 +452,48 @@ router.get("/:year", async (req, res) => {
   }
 });
 
-//5. GET /events/:id
-router.get("/:id", async (req, res) => {
+// GET /events/id/:id
+router.get("/id/:id", async (req, res) => {
   try {
-    const eventId = new ObjectId(req.params.id);
+    const eventId = parseInt(req.params.id);
+    if (isNaN(eventId)) {
+      return res.status(400).json({ success: false, message: "O parâmetro 'id' deve ser um número." });
+    }
 
     const event = await db.collection("events").findOne({ _id: eventId });
-
     if (!event) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
     }
 
-    // Procurar avaliações dos utilizadores que referem este evento
+    // Procurar avaliações
     const users = await db.collection("users").find({
-      "movies.movieid": event.id  // relaciona id do evento com movieid dos users
+      "movies.movieid": event._id
     }).toArray();
 
-    // Extrair todos os ratings deste evento
-    let ratings = [];
+    const ratings = [];
     for (const user of users) {
-      const matchedMovie = user.movies.find(m => m.movieid === event.id && m.rating != null);
-      if (matchedMovie) {
-        ratings.push(matchedMovie.rating);
-      }
+      const matchedMovie = user.movies.find(m => m.movieid === event._id && m.rating != null);
+      if (matchedMovie) ratings.push(matchedMovie.rating);
     }
 
-    // Calcular média
     const averageRating = ratings.length > 0
-      ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2)
-      : null;
+      ? Number((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
+      : "Sem avaliações";
 
-    res.status(200).json({
-      success: true,
-      data: {
-        ...event,
-        averageRating: averageRating ? Number(averageRating) : "Sem avaliações"
-      }
-    });
+    res.status(200).json({ success: true, data: { ...event, averageRating } });
+
   } catch (err) {
     console.error(err);
-    res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
+    res.status(500).json({ success: false, message: "Erro ao obter evento" });
   }
 });
 
 //9.PUT /events/:id
 router.put("/:id", async (req, res) => {
   try {
-    const eventId = req.params.id;
+    const eventId = parseInt(req.params.id);
+    if (isNaN(eventId)) return res.status(400).json({ success: false, message: "ID inválido" });
+
     const updatedData = { ...req.body };
 
     // não permite alterar id's
@@ -530,11 +505,11 @@ router.put("/:id", async (req, res) => {
     }
 
     const result = await db.collection("events").updateOne(
-      { _id: new ObjectId(eventId) },
+      { _id: eventId },
       { $set: updatedData }
     );
 
-    if (result.modifiedCount === 0) {
+    if (result.matchedCount === 0) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
     }
 
@@ -548,10 +523,9 @@ router.put("/:id", async (req, res) => {
 //7. DELETE /events/:id Remove um evento pelo seu ID interno do MongoDB
 router.delete("/:id", async (req, res) => {
   try {
-    const eventId = req.params.id;
-    const objectId = new ObjectId(eventId);
+    const eventId = parseInt(req.params.id);
 
-    const result = await db.collection("events").deleteOne({ _id: objectId });
+    const result = await db.collection("events").deleteOne({ _id: eventId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: "Evento não encontrado" });
@@ -561,28 +535,6 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(400).json({ success: false, message: "ID inválido ou erro no servidor" });
-  }
-});
-
-// auxiliar PATCH /events/add-reviews
-router.patch("/add-reviews", async (req, res) => {
-  try {
-    // Atualiza todos os eventos que não têm o campo 'reviews'
-    const result = await db.collection("events").updateMany(
-      { reviews: { $exists: false } }, // só quem não tem
-      { $set: { reviews: [] } }        // cria campo vazio
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `Atualizados ${result.modifiedCount} utilizador(es), adicionando 'reviews' vazio.`,
-    });
-  } catch (err) {
-    console.error("Erro ao atualizar eventos:", err);
-    res.status(500).json({
-      success: false,
-      message: "Erro ao atualizar eventos",
-    });
   }
 });
 

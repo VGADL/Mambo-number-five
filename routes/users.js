@@ -262,7 +262,7 @@ router.post("/:id/review/:event_id", async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: "Utilizador não encontrado" });
 
     // pega evento
-    const event = await db.collection("events").findOne({ id: eventId });
+    const event = await db.collection("events").findOne({ _id: eventId });
     if (!event) return res.status(404).json({ success: false, message: "Evento não encontrado" });
 
     // criar review
@@ -275,7 +275,7 @@ router.post("/:id/review/:event_id", async (req, res) => {
 
     // adicionar review ao evento
     const result = await db.collection("events").updateOne(
-      { id: eventId },
+      { _id: eventId },
       { $push: { reviews: review } }
     );
 
@@ -289,13 +289,19 @@ router.post("/:id/review/:event_id", async (req, res) => {
   }
 });
 
-//6. GET /users/:id
+// 6. GET /users/:id
 router.get("/:id", async (req, res) => {
   try {
     const userId = Number(req.params.id);
+
+    if (isNaN(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "O parâmetro 'id' deve ser um número válido."
+      });
+    }
+
     const user = await db.collection("users").findOne({ _id: userId });
-
-
 
     if (!user) {
       return res.status(404).json({
@@ -304,11 +310,14 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    //  Ordenar os eventos do user por rating
-    const sortedMovies = (user.movies || [])
+    const eventsArray = Array.isArray(user.movies) ? user.movies : [];
+
+    // Filtra apenas avaliações válidas e ordena por rating
+    const sortedEvents = eventsArray
+      .filter(m => m && typeof m.movieid === "number" && typeof m.rating === "number")
       .sort((a, b) => b.rating - a.rating);
 
-    if (sortedMovies.length === 0) {
+    if (sortedEvents.length === 0) {
       return res.status(200).json({
         success: true,
         data: { user, top_events: [] },
@@ -316,44 +325,36 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    // Buscar detalhes dos eventos
-    const eventIds = sortedMovies.map(m => m.movieid);
+    const eventIds = sortedEvents.map(m => m.movieid);
+
+    // Buscar eventos correspondentes
     const events = await db.collection("events")
-      .find({ id: { $in: eventIds } })
+      .find({ _id: { $in: eventIds } })
       .toArray();
 
-    // Combinar e filtrar só os eventos válidos (com nome)
-    const validTopEvents = sortedMovies
+    // Combina avaliações com eventos, apenas eventos existentes
+    const validTopEvents = sortedEvents
       .map(movie => {
-        const event = events.find(e => e.id === movie.movieid);
-        if (!event || !event.title?.rendered) return null; // ignorar se não tiver nome
+        const event = events.find(e => e._id === movie.movieid);
+        if (!event) return null;
         return {
           event_id: movie.movieid,
-          title: event.title.rendered,
+          title: event.title?.rendered || "Sem título",
           rating: movie.rating,
-          date: movie.date,
+          date: movie.date || null,
           subject: event.subject || null,
           venue: event.venue ? Object.values(event.venue)[0]?.name : null,
           link: event.link || null,
           featured_image: event.featured_media_large || null
         };
       })
-      .filter(e => e !== null) // remover os nulos
-      .slice(0, 3); // só top 3 válidos
+      .filter(e => e !== null)
+      .slice(0, 3); // só top 3
 
-    // Mensagem adequada
-    let message = "";
-    if (validTopEvents.length === 0) {
-      message = `${user.name} não tem eventos válidos com nome.`;
-    } else if (validTopEvents.length < 3) {
-      message = `${user.name} tem apenas ${validTopEvents.length} evento(s) válido(s) com nome.`;
-    } else if (validTopEvents.length > 3) {
-      message = `${user.name} tem ${validTopEvents.length} eventos válidos — a mostrar os 3 melhores.`;
-    } else {
-      message = `Top 3 eventos do utilizador ${user.name}.`;
-    }
+    const message = validTopEvents.length === 0
+      ? `${user.name} não tem eventos válidos com nome.`
+      : `Top ${validTopEvents.length} eventos do utilizador ${user.name}.`;
 
-    // Resposta
     res.status(200).json({
       success: true,
       message,
@@ -457,28 +458,6 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Erro ao remover utilizador"
-    });
-  }
-});
-
-// auxiliar PATCH /users/add-favorites
-router.patch("/add-favorites", async (req, res) => {
-  try {
-    // Atualiza todos os utilizadores que não têm o campo 'favorites'
-    const result = await db.collection("users").updateMany(
-      { favorites: { $exists: false } }, // só quem não tem
-      { $set: { favorites: [] } }        // cria campo vazio
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `Atualizados ${result.modifiedCount} utilizador(es), adicionando 'favorites' vazio.`,
-    });
-  } catch (err) {
-    console.error("Erro ao atualizar utilizadores:", err);
-    res.status(500).json({
-      success: false,
-      message: "Erro ao atualizar utilizadores",
     });
   }
 });
