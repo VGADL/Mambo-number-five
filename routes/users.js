@@ -4,6 +4,21 @@ import db from "../db/config.js";
 import { ObjectId } from "mongodb";
 const router = express.Router();
 
+// Função auxiliar de paginação
+function paginateArray(array, req) {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  return {
+    page,
+    limit,
+    total: array.length,
+    totalPages: Math.ceil(array.length / limit),
+    data: array.slice(skip, skip + limit)
+  };
+}
+
 // 2. GET /users Lista de utilizadores com paginação 20/página 
 router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 1;  // página atual
@@ -125,11 +140,13 @@ router.post("/", async (req, res) => {
   }
 });
 
-//16 GET /users/top-reviewers Lista os utilizadores com mais avaliações (top 5)
-router.get("/top-reviewers", async (req, res) => {
+//16 GET /users/top-reviewers Lista os utilizadores com mais avaliações
+router.get("/top-reviewers/:limit", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
-
+    const limit = parseInt(req.params.limit);
+    if (isNaN(limit) || limit <= 0) {
+      return res.status(400).json({ success: false, message: "O parâmetro 'limit' deve ser um número positivo." });
+    }
     // Agregação no MongoDB para contar o tamanho do array "movies" de cada user
     const topReviewers = await db.collection("users").aggregate([
       {
@@ -154,11 +171,12 @@ router.get("/top-reviewers", async (req, res) => {
       });
     }
 
+    const paginatedResult = paginateArray(topReviewers, req);
     res.status(200).json({
       success: true,
       total: topReviewers.length,
       message: `Top ${topReviewers.length} utilizadores com mais avaliações.`,
-      data: topReviewers
+      data: paginatedResult.data
     });
 
   } catch (err) {
@@ -210,10 +228,11 @@ router.get("/:id/favorites", async (req, res) => {
     const user = await db.collection("users").findOne({ _id: userId }, { projection: { favorites: 1 } });
     if (!user) return res.status(404).json({ success: false, message: "Utilizador não encontrado" });
 
+    const paginatedResult = paginateArray(user.favorites || [], req);
     res.status(200).json({
       success: true,
       total: (user.favorites || []).length,
-      data: user.favorites || []
+      data: paginatedResult.data
     });
 
   } catch (err) {
@@ -326,12 +345,12 @@ router.get("/:id", async (req, res) => {
 
     const eventIds = sortedEvents.map(m => m.movieid);
 
-    // Pega detalhes dos eventos avaliados
+    // Buscar eventos correspondentes
     const events = await db.collection("events")
       .find({ _id: { $in: eventIds } })
       .toArray();
 
-    // Mapeia avaliações para detalhes dos eventos
+    // Combina avaliações com eventos, apenas eventos existentes
     const validTopEvents = sortedEvents
       .map(movie => {
         const event = events.find(e => e._id === movie.movieid);
@@ -432,7 +451,7 @@ router.delete("/:id", async (req, res) => {
       });
     }
 
-    // Adiciona lógica para remover avaliações feitas por este utilizador em eventos
+    // insere
     if (docs.length === 1) {
       const r = await db.collection("events").insertOne(docs[0]);
       return res.status(201).json({

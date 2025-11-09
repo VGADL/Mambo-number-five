@@ -4,6 +4,21 @@ import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
+// Função auxiliar de paginação
+function paginateArray(array, req) {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  return {
+    page,
+    limit,
+    total: array.length,
+    totalPages: Math.ceil(array.length / limit),
+    data: array.slice(skip, skip + limit)
+  };
+}
+
 // 1. GET /events Lista de eventos com paginação (20 por página) 
 router.get("/", async (req, res) => {
   const page = parseInt(req.query.page) || 1;  // página atual
@@ -219,7 +234,7 @@ router.get("/compare/:id1/:id2", async (req, res) => {
 // 13. GET /events/star Lista de eventos com mais 5 estrelas.
 router.get("/star", async (req, res) => {
   try {
-    // Buscar todos os utilizadores
+    // Procurar todos os utilizadores
     const users = await db.collection("users").find({}).toArray();
 
     // Contar quantas vezes cada evento recebeu 5 estrelas
@@ -309,11 +324,12 @@ router.get("/top/:limit", async (req, res) => {
     //  Ordenar por média e limitar resultados
     const sortedEvents = eventsWithRatings.sort((a, b) => b.averageRating - a.averageRating);
     const limitedEvents = sortedEvents.slice(0, limit);
+    const paginatedResult = paginateArray(limitedEvents, req);
 
     res.status(200).json({
       success: true,
-      total: limitedEvents.length,
-      data: limitedEvents
+      total: paginatedResult.total,
+      data: paginatedResult.data
     });
   } catch (err) {
     console.error(err);
@@ -357,12 +373,12 @@ router.get("/reviews/:order", async (req, res) => {
     const sortedEvents = eventsWithReviewCount.sort((a, b) => {
       return order === "asc" ? a.totalReviews - b.totalReviews : b.totalReviews - a.totalReviews;
     });
-
+    const paginatedResult = paginateArray(sortedEvents, req);
     res.status(200).json({
       success: true,
       order,
-      total: sortedEvents.length,
-      data: sortedEvents
+      total: paginatedResult.total,
+      data: paginatedResult.data
     });
   } catch (err) {
     console.error(err);
@@ -390,12 +406,12 @@ router.get("/active", async (req, res) => {
     };
  // Obter eventos ativos na data
     const events = await db.collection("events").find(filter).toArray();
-
+    const paginatedResult = paginateArray(events, req);
     res.status(200).json({
       success: true,
       date,
-      total: events.length,
-      data: events
+      total: paginatedResult.total,
+      data: paginatedResult.data
     });
   } catch (err) {
     console.error("Erro em /events/active:", err);
@@ -407,7 +423,7 @@ router.get("/active", async (req, res) => {
 router.get("/year/:year", async (req, res) => {
   try {
     const year = parseInt(req.params.year);
-// Validar ano
+    // Validar ano
     if (isNaN(year)) {
       return res.status(400).json({
         success: false,
@@ -437,12 +453,13 @@ router.get("/year/:year", async (req, res) => {
 
     // Filtrar eventos que foram avaliados no ano
     const filteredEvents = events.filter(ev => reviewedEventIds.has(ev._id));
+    const paginatedResult = paginateArray(filteredEvents, req);
 
     res.status(200).json({
       success: true,
       year: year,
-      total: filteredEvents.length,
-      data: filteredEvents
+      total: paginatedResult.total,
+      data: paginatedResult.data
     });
   } catch (err) {
     console.error(err);
