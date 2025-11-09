@@ -395,6 +395,36 @@ router.get("/reviews/:order", async (req, res) => {
   }
 });
 
+// GET /events/active?date=YYYY-MM-DD novo endpoint
+router.get("/active", async (req, res) => {
+  try {
+    const date =
+      (req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date))
+        ? req.query.date
+        : new Date().toISOString().split("T")[0];
+
+    const filter = {
+      $or: [
+        { $and: [{ StartDate: { $lte: date } }, { LastDate: { $gte: date } }] },
+        { occurences: date }
+      ]
+    };
+
+    const events = await db.collection("events").find(filter).toArray();
+
+    res.status(200).json({
+      success: true,
+      date,
+      total: events.length,
+      data: events
+    });
+  } catch (err) {
+    console.error("Erro em /events/active:", err);
+    res.status(500).json({ success: false, message: "Erro ao obter eventos ativos" });
+  }
+});
+
+
 //14. GET /events/:year
 router.get("/:year", async (req, res) => {
   try {
