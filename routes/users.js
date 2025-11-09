@@ -126,7 +126,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-
 //16 GET /users/top-reviewers Lista os utilizadores com mais avaliações (top 5)
 router.get("/top-reviewers", async (req, res) => {
   try {
@@ -458,6 +457,28 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Erro ao remover utilizador"
+    });
+  }
+});
+
+// auxiliar PATCH /users/add-favorites
+router.patch("/add-favorites", async (req, res) => {
+  try {
+    // Atualiza todos os utilizadores que não têm o campo 'favorites'
+    const result = await db.collection("users").updateMany(
+      { favorites: { $exists: false } }, // só quem não tem
+      { $set: { favorites: [] } }        // cria campo vazio
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Atualizados ${result.modifiedCount} utilizador(es), adicionando 'favorites' vazio.`,
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar utilizadores:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao atualizar utilizadores",
     });
   }
 });

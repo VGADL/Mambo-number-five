@@ -235,7 +235,6 @@ router.get("/compare/:id1/:id2", async (req, res) => {
   }
 });
 
-
 // 13. GET /events/star Lista de eventos com mais 5 estrelas.
 router.get("/star", async (req, res) => {
   try {
@@ -424,7 +423,6 @@ router.get("/active", async (req, res) => {
   }
 });
 
-
 //14. GET /events/:year
 router.get("/:year", async (req, res) => {
   try {
@@ -566,6 +564,26 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+// auxiliar PATCH /events/add-reviews
+router.patch("/add-reviews", async (req, res) => {
+  try {
+    // Atualiza todos os eventos que não têm o campo 'reviews'
+    const result = await db.collection("events").updateMany(
+      { reviews: { $exists: false } }, // só quem não tem
+      { $set: { reviews: [] } }        // cria campo vazio
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Atualizados ${result.modifiedCount} utilizador(es), adicionando 'reviews' vazio.`,
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar eventos:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao atualizar eventos",
+    });
+  }
+});
+
 export default router;
-
-
